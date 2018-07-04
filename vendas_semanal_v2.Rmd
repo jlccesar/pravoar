@@ -1,0 +1,225 @@
+---
+title: ""
+output: html_document
+  
+---
+
+```{r packages, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+library(xtable)
+library(plyr)
+library(tidyverse)
+library(forcats)
+library(readxl)
+library(magrittr)
+library(lubridate)
+library(knitr)
+library(kableExtra)
+library(tinytex)
+
+vendas <- read_excel("C:/Users/João/Desktop/pravoar/vendas.xlsx")
+
+# vendas_atual <- filter(vendas,data_reserva>=today()-7 & data_reserva<today())
+# vendas_passada <- filter(vendas,data_reserva>=today()-14 & data_reserva<today()-7)
+
+vendas_atual <- filter(vendas,data_reserva>=dmy("11/06/2018") & data_reserva<dmy("18/06/2018"))
+vendas_passada <- filter(vendas,data_reserva>=dmy("04/06/2018") & data_reserva<dmy("11/06/2018"))
+
+```
+
+```{r levels, echo=FALSE}
+#levels utilizados no codigo
+periodo_levels <- c("0H-5H59","6H-11H59","12H-17H59","18H-23H59")
+dia_levels <- c("Domingo","Segunda","Terca","Quarta","Quinta", "Sexta", "Sabado")
+estadia_levels <- c("OW","1-3","4-7","8 ou +")
+antecipacao_levels <- c("1-7","8-14","15-30","31 ou +")
+idade_levels <- c("1-17","18-24","25-35","36-45","46 ou +")
+sexo_levels <- c("Feminino", "Masculino")
+owrt_levels <- c("OW","RT")
+cia_levels <- c("Azul","Avianca","Gol","Latam","Passaredo")
+bagagem_levels <- c("Sim","Não")
+escala_levels <- c("0","1","2","3")
+```
+
+```{r pressure, echo=FALSE, out.width="10%"}
+include_graphics("pravoar-logo.png")
+```
+
+<center><h1>Relatório de Vendas Semanal</h1></center>
+>
+>
+
+######**Semana Atual: **18/06/2018 - 11/06/2018  
+######**Semana Passada: **11/06/2018 - 04/06/2018
+>
+>
+
+```{r resumo_atual_passada, echo=FALSE, include=FALSE, warning=FALSE}
+
+# calculando quantidade de voos por passageiro, sem levar em conta a escala levar em conta
+vendas_atual$qtd_voos <- if_else(vendas_atual$ow_rt=="OW",vendas_atual$qtd_pax*1,vendas_atual$qtd_pax*2) 
+
+vendas_passada$qtd_voos <- if_else(vendas_passada$ow_rt=="OW",vendas_passada$qtd_pax*1,vendas_passada$qtd_pax*2) 
+
+#calculando variáveis da tabela de resumo
+
+voos_atual <- sum(vendas_atual$qtd_voos)
+pax_atual <- sum(vendas_atual$qtd_pax)
+compras_atual <- nrow(vendas_atual)
+gmv_atual <- round(sum(vendas_atual$preco_cliente),digits=0)
+tm_atual <- round(gmv_atual/pax_atual,digits = 0)
+receita_atual <- round(0.05*gmv_atual, digits=0)
+
+voos_passada <- sum(vendas_passada$qtd_voos)
+pax_passada <- sum(vendas_passada$qtd_pax)
+compras_passada <- nrow(vendas_passada)
+gmv_passada <- round(sum(vendas_passada$preco_cliente),digits=0)
+tm_passada <- round(gmv_passada/pax_passada, digits=0)
+receita_passada <- round(0.05*gmv_passada, digits=0)
+
+resumo_atual <- c(voos_atual,pax_atual,compras_atual,gmv_atual, tm_atual, receita_atual)
+resumo_atual <- tibble(resumo_atual)
+resumo_names <- c("Voos","Pax", "Compras", "GMV", "Ticket Médio", "Receita  5%")
+resumo_names <- tibble(resumo_names)
+
+resumo_passada <- c(voos_passada,pax_passada,compras_passada,gmv_passada, tm_passada, receita_passada)
+resumo_passada <- tibble(resumo_passada)
+
+
+resumo_tabela <- bind_cols(resumo_names[1],resumo_passada[1],resumo_atual[1])
+colnames(resumo_tabela)[1] <- "Variáveis"
+colnames(resumo_tabela)[2] <- "Passada"
+colnames(resumo_tabela)[3] <- "Atual"
+
+resumo_tabela <- mutate(resumo_tabela, crescimento=round((Atual/Passada-1)*100,digits=0))
+
+
+
+#arrumando formato das entradas da tabela
+resumo_tabela$crescimento <- paste(resumo_tabela$crescimento,"%",sep="")
+  colnames(resumo_tabela)[4] <- "Crescimento" 
+
+for (i in 4:6) { 
+resumo_tabela$Atual[i] <- paste("R$",resumo_tabela$Atual[i],sep="")
+resumo_tabela$Passada[i] <- paste("R$",resumo_tabela$Passada[i],sep="")
+}
+
+
+# gmvow <- filter(vendas,ow_rt=="OW") 
+# gmvow <- sum(gmvow$preco_cliente)
+# gmvrt <- filter(vendas,ow_rt=="RT") 
+# gmvrt <- sum(gmvrt$preco_cliente)
+```
+
+```{r cia_atual_passada, echo=FALSE, include=FALSE, warning=FALSE}
+
+vendas_atual$cia_no <- if_else(vendas_atual$ow_rt=="OW",1,2)
+cia_atual <- aggregate(vendas_atual$cia_no, by=list(vendas_atual$cia_ida), FUN = sum)
+
+vendas_passada$cia_no <- if_else(vendas_passada$ow_rt=="OW",1,2)
+cia_passada <- aggregate(vendas_passada$cia_no, by=list(vendas_passada$cia_ida), FUN = sum)
+
+  if (nrow(cia_passada)==nrow(cia_atual)){
+  } else {
+      if (nrow(cia_passada)<nrow(cia_atual)) {
+        a <- nrow(cia_passada)+1
+        cia_passada[a:nrow(cia_atual),] <- "-"
+      } else{
+        b <- nrow(cia_atual)+1
+        cia_atual[b:nrow(cia_passada),] <- "-"
+      }
+    }
+
+
+cia_tabela <- bind_cols(cia_passada[1],cia_passada[2],cia_atual[1],cia_atual[2])
+  colnames(cia_tabela)[1] <- "Cia"
+  colnames(cia_tabela)[2] <- "Passada"
+  colnames(cia_tabela)[3] <- "Cia"
+  colnames(cia_tabela)[4] <- "Atual"
+```
+
+
+
+```{r od_atual_passada, echo=FALSE, include=FALSE, warning=FALSE}
+#calculando OD da viagem
+vendas_atual$origem_ida2 <- revalue(vendas_atual$origem_ida, c(GRU="SAO",CGH="SAO", SDU="RIO", GIG="RIO", CNF="BHZ"))
+vendas_atual$destino_ida2 <- revalue(vendas_atual$destino_ida, c(GRU="SAO",CGH="SAO", SDU="RIO", GIG="RIO", CNF="BHZ"))
+vendas_atual <- mutate(vendas_atual, od_viagem_atual=paste(origem_ida2,destino_ida2, sep = ""))
+
+vendas_passada$origem_ida2 <- revalue(vendas_passada$origem_ida, c(GRU="SAO",CGH="SAO", SDU="RIO", GIG="RIO", CNF="BHZ"))
+vendas_passada$destino_ida2 <- revalue(vendas_passada$destino_ida, c(GRU="SAO",CGH="SAO", SDU="RIO", GIG="RIO", CNF="BHZ"))
+vendas_passada <- mutate(vendas_passada, od_viagem_passada=paste(origem_ida2,destino_ida2, sep = ""))
+
+od_atual <- vendas_atual %>% count(od_viagem_atual)
+colnames(od_atual)[1] <- "OD"
+colnames(od_atual)[2] <- "Quantidade"
+
+od_atual <- data.frame(od_atual[1],od_atual[2])
+od_atual <- arrange(od_atual,desc(Quantidade))
+
+od_passada <- vendas_passada %>% count(od_viagem_passada)
+colnames(od_passada)[1] <- "OD"
+colnames(od_passada)[2] <- "Quantidade"
+
+od_passada <- data.frame(od_passada[1],od_passada[2])
+od_passada <- arrange(od_passada,desc(Quantidade))
+
+if (nrow(od_passada)==nrow(od_atual)){
+} else {
+  if (nrow(od_passada)<nrow(od_atual)) {
+    a <- nrow(od_passada)+1
+    od_passada[a:nrow(od_atual),] <- "-"
+  } else{
+    b <- nrow(od_atual)+1
+    od_atual[b:nrow(od_passada),] <- "-"
+  }
+}
+
+od_tabela <- bind_cols(od_passada[1], od_passada[2], od_atual[1], od_atual[2])
+colnames(od_tabela)[1] <- "OD"
+colnames(od_tabela)[2] <- "Passada"
+colnames(od_tabela)[3] <- "OD"
+colnames(od_tabela)[4] <- "Atual"
+
+```
+
+
+
+```{r, echo=FALSE, results='asis'}
+
+kable(resumo_tabela,align = rep('c'), caption = "Tabela I - Variação do Volume de Vendas", digits=0) %>%
+  kable_styling(bootstrap_options = c("striped","hover","condensed"),full_width = F,position = "center") %>% 
+  column_spec(1, bold=T, color="#374F8C", width = "5cm") %>% 
+  column_spec(2:4,width = "3cm") %>%
+  column_spec(4,color="#767575") %>%
+  row_spec(0, color="white", background = "#374F8C")
+
+
+
+```
+>
+
+```{r,echo=FALSE, warning=FALSE}
+
+kable(od_tabela,align = rep('c'),caption = "Tabela II - TOP 6 ODs", digits=0) %>% 
+  kable_styling(bootstrap_options = c("striped","hover","condensed"),full_width = F,position = "center") %>%
+  column_spec(1, bold = T,color="#374F8C", width = "3cm") %>%
+  column_spec(3, bold = T,color="#374F8C", width = "3cm") %>%
+  column_spec(2, width = "2cm" ) %>%
+  column_spec(4, width = "2cm") %>%
+  row_spec(0, color="white", background = "#374F8C")
+```
+>
+
+
+```{r, echo=FALSE, results='asis'}
+
+kable(cia_tabela,align = rep('c'), caption ="Tabela III - Cia Aérea", digits=0) %>%
+  kable_styling(bootstrap_options = c("striped","hover","condensed"),full_width = F,position = "center") %>%
+  column_spec(1, bold = T,color="#374F8C", width = "3cm") %>%
+  column_spec(3, bold = T,color="#374F8C", width = "3cm") %>%
+  column_spec(2, width = "2cm" ) %>%
+  column_spec(4, width = "2cm") %>%  
+  row_spec(0, color="white", background = "#374F8C")
+
+```

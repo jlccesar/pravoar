@@ -1,0 +1,221 @@
+---
+title: "vendas_v3"
+output:
+  html_document: default
+---
+
+
+```{r packages, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+library(xtable)
+library(plyr)
+library(tidyverse)
+library(forcats)
+library(readxl)
+library(magrittr)
+library(lubridate)
+library(knitr)
+library(kableExtra)
+library(tinytex)
+
+vendas <- read_excel("C:/Users/João/Desktop/pravoar/vendas.xlsx")
+
+vendas_atual <- filter(vendas,data_reserva>=today()-7 & data_reserva<today())
+vendas_passada <- filter(vendas,data_reserva>=today()-14 & data_reserva<today()-7)
+```
+
+
+```{r levels, echo=FALSE}
+#levels utilizados no codigo
+periodo_levels <- c("0H-5H59","6H-11H59","12H-17H59","18H-23H59")
+dia_levels <- c("Domingo","Segunda","Terca","Quarta","Quinta", "Sexta", "Sabado")
+estadia_levels <- c("OW","1-3","4-7","8 ou +")
+antecipacao_levels <- c("1-7","8-14","15-30","31 ou +")
+idade_levels <- c("1-17","18-24","25-35","36-45","46 ou +")
+sexo_levels <- c("Feminino", "Masculino")
+owrt_levels <- c("OW","RT")
+cia_levels <- c("Azul","Avianca","Gol","Latam","Passaredo")
+bagagem_levels <- c("Sim","Não")
+escala_levels <- c("0","1","2","3")
+```
+
+
+```{r variaveis, echo=FALSE, include=FALSE, warning=FALSE}
+#calculando tempo de emissÃ£o em minutos
+vendas$tempo_emissao <- as.numeric(difftime(vendas$data_emissao,vendas$data_reserva,units = "mins"))
+
+#calculando tempo de ida total do voo
+vendas$tempo_ida <- difftime(vendas$data_chegada_ida,vendas$data_ida,units = "hours") 
+
+#calculando tempo de volta total do voo
+vendas$tempo_volta <- difftime(vendas$data_chegada_volta,vendas$data_volta,units = "hours") 
+
+```
+
+
+##Semana Atual
+```{r periodo_atual, echo=FALSE, include=FALSE, warning=FALSE}
+#periodo da compra
+vendas_atual <- mutate(vendas_atual,periodo_compra=hour(data_reserva))
+
+vendas_atual$periodo_compra <- if_else(vendas_atual$periodo_compra<6,"0H-5H59",if_else(vendas_atual$periodo_compra<12,"6H-11H59",if_else(vendas_atual$periodo_compra<18,"12H-17H59","18H-23H59")))
+vendas_atual$periodo_compra <- factor(vendas_atual$periodo_compra,levels =periodo_levels )
+
+#periodo da ida
+vendas_atual <- mutate(vendas_atual,periodo_ida=hour(data_ida))
+vendas_atual$periodo_ida <- if_else(vendas_atual$periodo_ida<6,"0H-5H59",if_else(vendas_atual$periodo_ida<12,"6H-11H59",if_else(vendas_atual$periodo_ida<18,"12H-17H59","18H-23H59")))
+vendas_atual$periodo_ida <- factor(vendas_atual$periodo_ida,levels =periodo_levels )
+
+#periodo da volta
+vendas_atual <- mutate(vendas_atual,periodo_volta=hour(data_volta))
+vendas_atual$periodo_volta <- if_else(vendas_atual$periodo_volta<6,"0H-5H59",if_else(vendas_atual$periodo_volta<12,"6H-11H59",if_else(vendas_atual$periodo_volta<18,"12H-17H59","18H-23H59")))
+vendas_atual$periodo_volta <- factor(vendas_atual$periodo_volta,levels =periodo_levels )
+
+#criando tabela de apresentação de count de periodo compra;ida;volta
+periodo_compra <-vendas_atual %>% count(periodo_compra)
+
+if (periodo_compra[1,1]!="0H-5H59"){
+  x <- c("0H-5H59","-")
+  periodo_compra <- rbind(x,periodo_compra) 
+}
+
+periodo_ida <- vendas_atual %>% count(periodo_ida)
+
+if (periodo_ida[1,1]!="0H-5H59"){
+  x <- c("0H-5H59","-")
+  periodo_ida <- rbind(x,periodo_ida) 
+}
+
+
+periodo_volta <- vendas_atual %>% count(periodo_volta)
+  if (is.na(periodo_volta[1,1])){
+    a <- c("0H-5H59","-")
+    b<- c("6H-11H59","-")
+    c<- c("12H-17H59","-")
+    d<- c("18H-23H59","-")
+    periodo_volta <- rbind(a,b,c,d,periodo_volta)
+    periodo_volta <- periodo_volta[1:4,]
+  } else {
+    if (periodo_volta[1,1]!="0H-5H59"){
+      a <- c("0H-5H59","-")
+      periodo_volta <- rbind(a,periodo_volta)
+    }
+  }
+
+# if (!is.na(periodo_volta[1,1])){
+#   if (periodo_volta[1,1]!="0H-5H59"){
+#   }
+# } else {x <- c("0H-5H59","-")
+# periodo_volta <- rbind(x,periodo_volta) 
+# }
+
+# if (!is.na(periodo_volta[2,1])) {
+#   if (periodo_volta[2,1]=="12H-17H59"){
+#     n <- nrow(periodo_volta)
+#     x <- c("6H-11H59","-")
+#     periodo_volta <- rbind(periodo_volta[1,],x,periodo_volta[1:n,])
+#   }
+# }
+
+# if(!is.na(periodo_volta[2,1])){
+#   if(periodo_volta[2,1]="6H-11H59"){
+#     x <- c("6H-11H59","-")
+#     periodo_volta <- rbind(periodo_volta[1,2],x,periodo_volta[2,2])
+#   } 
+# } else {print("shit")
+#   }
+
+
+periodo_atual_tabela <- bind_cols(periodo_compra[1],periodo_compra[2],periodo_ida[2],periodo_volta[2])
+colnames(periodo_atual_tabela)[1] <- "Periodo"
+colnames(periodo_atual_tabela)[2] <- "Compra"
+colnames(periodo_atual_tabela)[3] <- "Ida"
+colnames(periodo_atual_tabela)[4] <- "Volta"
+```
+
+##Semana Passada
+```{r periodo_passada, echo=FALSE, include=FALSE, warning=FALSE}
+#periodo da compra
+vendas_passada <- mutate(vendas_passada,periodo_compra=hour(data_reserva))
+
+vendas_passada$periodo_compra <- if_else(vendas_passada$periodo_compra<6,"0H-5H59",if_else(vendas_passada$periodo_compra<12,"6H-11H59",if_else(vendas_passada$periodo_compra<18,"12H-17H59","18H-23H59")))
+vendas_passada$periodo_compra <- factor(vendas_passada$periodo_compra,levels =periodo_levels )
+
+#periodo da ida
+vendas_passada <- mutate(vendas_passada,periodo_ida=hour(data_ida))
+vendas_passada$periodo_ida <- if_else(vendas_passada$periodo_ida<6,"0H-5H59",if_else(vendas_passada$periodo_ida<12,"6H-11H59",if_else(vendas_passada$periodo_ida<18,"12H-17H59","18H-23H59")))
+vendas_passada$periodo_ida <- factor(vendas_passada$periodo_ida,levels =periodo_levels )
+
+#periodo da volta
+vendas_passada <- mutate(vendas_passada,periodo_volta=hour(data_volta))
+vendas_passada$periodo_volta <- if_else(vendas_passada$periodo_volta<6,"0H-5H59",if_else(vendas_passada$periodo_volta<12,"6H-11H59",if_else(vendas_passada$periodo_volta<18,"12H-17H59","18H-23H59")))
+vendas_passada$periodo_volta <- factor(vendas_passada$periodo_volta,levels =periodo_levels )
+
+#criando tabela de apresentação de count de periodo compra;ida;volta
+periodo_compra <-vendas_passada %>% count(periodo_compra)
+
+if (periodo_compra[1,1]!="0H-5H59"){
+  x <- c("0H-5H59","-")
+  periodo_compra <- rbind(x,periodo_compra) 
+}
+
+periodo_ida <- vendas_passada %>% count(periodo_ida)
+
+if (periodo_ida[1,1]!="0H-5H59"){
+  x <- c("0H-5H59","-")
+  periodo_ida <- rbind(x,periodo_ida) 
+}
+
+
+periodo_volta <- vendas_passada %>% count(periodo_volta)
+  if (is.na(periodo_volta[1,1])){
+    a <- c("0H-5H59","-")
+    b<- c("6H-11H59","-")
+    c<- c("12H-17H59","-")
+    d<- c("18H-23H59","-")
+    periodo_volta <- rbind(a,b,c,d,periodo_volta)
+    periodo_volta <- periodo_volta[1:4,]
+  } else {
+    if (periodo_volta[1,1]!="0H-5H59"){
+      a <- c("0H-5H59","-")
+      periodo_volta <- rbind(a,periodo_volta)
+    }
+  }
+
+# if (!is.na(periodo_volta[1,1])){
+#   if (periodo_volta[1,1]!="0H-5H59"){
+#   }
+# } else {x <- c("0H-5H59","-")
+# periodo_volta <- rbind(x,periodo_volta) 
+# }
+
+# if (!is.na(periodo_volta[2,1])) {
+#   if (periodo_volta[2,1]=="12H-17H59"){
+#     n <- nrow(periodo_volta)
+#     x <- c("6H-11H59","-")
+#     periodo_volta <- rbind(periodo_volta[1,],x,periodo_volta[1:n,])
+#   }
+# }
+
+# if(!is.na(periodo_volta[2,1])){
+#   if(periodo_volta[2,1]="6H-11H59"){
+#     x <- c("6H-11H59","-")
+#     periodo_volta <- rbind(periodo_volta[1,2],x,periodo_volta[2,2])
+#   } 
+# } else {print("shit")
+#   }
+
+
+periodo_passada_tabela <- bind_cols(periodo_compra[1],periodo_compra[2],periodo_ida[2],periodo_volta[2])
+colnames(periodoo_passada_tabela)[1] <- "Periodo"
+colnames(periodo_passada_tabela)[2] <- "Compra"
+colnames(periodo_passada_tabela)[3] <- "Ida"
+colnames(periodo_passada_tabela)[4] <- "Volta"
+```
+
+```{r resultados, echo=FALSE, results='asis'}
+kable(periodo_atual_tabela,align = rep('c')) %>% kable_styling(bootstrap_options = c("striped","hover","condensed"),full_width = F,position = "center")
+
+kable(periodo_passada_tabela,align = rep('c')) %>% kable_styling(bootstrap_options = c("striped","hover","condensed"),full_width = F,position = "center")
+```
+
